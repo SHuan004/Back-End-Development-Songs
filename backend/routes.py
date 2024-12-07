@@ -51,3 +51,97 @@ def parse_json(data):
 ######################################################################
 # INSERT CODE HERE
 ######################################################################
+# Endpoint /health
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "OK"}), 200
+
+# Endpoint /count
+@app.route("/count", methods=["GET"])
+def count():
+    try:
+        songs_count = db.songs.count_documents({})
+        return jsonify({"count": songs_count}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/song", methods=["GET"])
+def songs():
+    try:
+        # Recuperar todos los documentos en la colección 'songs'
+        songs_list = list(db.songs.find({}, {"_id": 0}))  # Excluir el campo '_id' para simplificar la salida
+        return jsonify({"songs": songs_list}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Endpoint /song/<id>
+@app.route("/song/<int:id>", methods=["GET"])
+def get_song_by_id(id):
+    try:
+        # Buscar una canción por ID en la colección 'songs'
+        song = db.songs.find_one({"id": id}, {"_id": 0})  # Excluir '_id' para simplificar la salida
+        if not song:
+            return jsonify({"message": f"Canción con id {id} no encontrada"}), 404
+        return jsonify(song), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/song", methods=["POST"])
+def create_song():
+    try:
+        # Extraer datos del cuerpo de la solicitud
+        song = request.get_json()
+        if not song or 'id' not in song:
+            return jsonify({"Message": "Datos de la canción no válidos"}), 400
+
+        # Verificar si ya existe una canción con el mismo ID
+        existing_song = db.songs.find_one({"id": song['id']})
+        if existing_song:
+            return jsonify({"Message": f"Canción con id {song['id']} ya presente"}), 302
+
+        # Insertar la nueva canción en la base de datos
+        result = db.songs.insert_one(song)
+        return jsonify({"inserted_id": str(result.inserted_id)}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/song/<int:id>", methods=["PUT"])
+def update_song(id):
+    try:
+        # Extraer datos del cuerpo de la solicitud
+        updated_data = request.get_json()
+        if not updated_data:
+            return jsonify({"message": "Datos de la canción no válidos"}), 400
+
+        # Buscar si la canción existe
+        existing_song = db.songs.find_one({"id": id})
+        if not existing_song:
+            return jsonify({"message": "Canción no encontrada"}), 404
+
+        # Actualizar la canción
+        result = db.songs.update_one({"id": id}, {"$set": updated_data})
+
+        if result.modified_count > 0:
+            updated_song = db.songs.find_one({"id": id}, {"_id": 0})
+            return jsonify(updated_song), 201
+        else:
+            return jsonify({"message": "Canción encontrada, pero no se actualizó nada"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Endpoint DELETE /song/<int:id>
+@app.route("/song/<int:id>", methods=["DELETE"])
+def delete_song(id):
+    try:
+        # Intentar eliminar la canción con el id especificado
+        result = db.songs.delete_one({"id": id})
+
+        if result.deleted_count == 0:
+            # Si no se eliminó ninguna canción, retornar 404
+            return jsonify({"message": "Canción no encontrada"}), 404
+
+        # Si la canción fue eliminada exitosamente, retornar 204 No Content
+        return '', 204
+    except Exception as e:
+        # Manejo de errores en caso de excepciones
+        return jsonify({"error": str(e)}), 500
